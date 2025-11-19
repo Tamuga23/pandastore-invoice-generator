@@ -1,0 +1,11 @@
+# Ignorar la carpeta de entorno virtual
+venv/
+
+# Ignorar archivos compilados de Python
+__pycache__/
+
+# IMPORTANTE: Ignorar claves secretas
+.env
+
+# Archivos de sistema
+.DS_Store
