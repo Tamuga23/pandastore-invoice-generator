@@ -1,12 +1,16 @@
 import streamlit as st
 import datetime
+import os  
 from constants import PRODUCT_CATALOG, DEFAULT_EXCHANGE_RATE
 from gemini_service import parse_client_info
 from pdf_generator import generate_pdf_file
-import os
 
 # --- Configuración de Página ---
 st.set_page_config(page_title="PandaStore Facturación", layout="wide")
+
+# --- Constantes ---
+# CAMBIO AQUÍ: Ponemos el nombre exacto de tu archivo
+LOGO_FILENAME = "logo.jpeg"  
 
 # --- Inicialización de Estado ---
 if 'invoice_items' not in st.session_state:
@@ -20,11 +24,25 @@ if 'consecutive' not in st.session_state:
 with st.sidebar:
     st.title("Configuración")
     
-    # 1. Subir Logo
+    # 1. Gestión de Logo Persistente
     st.subheader("Logotipo")
-    uploaded_logo = st.file_uploader("Subir Logo de la Tienda", type=['png', 'jpg', 'jpeg'])
-    if uploaded_logo:
-        st.image(uploaded_logo, width=100, caption="Vista previa")
+    
+    # Cargar logo desde el disco (Predeterminado)
+    logo_bytes = None
+    
+    # Verificamos si existe el archivo logo.jpeg
+    if os.path.exists(LOGO_FILENAME):
+        with open(LOGO_FILENAME, "rb") as f:
+            logo_bytes = f.read()
+        st.image(logo_bytes, width=120, caption="Logo Actual")
+    else:
+        st.info(f"No se encontró {LOGO_FILENAME} en la carpeta.")
+
+    # Opción para cambiarlo temporalmente (opcional)
+    uploaded_logo = st.file_uploader("Cambiar Logo temporalmente", type=['png', 'jpg', 'jpeg'])
+    if uploaded_logo is not None:
+        logo_bytes = uploaded_logo.getvalue()
+        st.image(logo_bytes, width=120, caption="Nuevo Logo")
 
     st.divider()
     
@@ -67,7 +85,6 @@ st.divider()
 # 2. Agregar Productos
 st.subheader("Agregar Productos")
 
-# Contenedor para agregar producto con imagen
 with st.container(border=True):
     col_prod, col_qty = st.columns([3, 1])
     with col_prod:
@@ -84,24 +101,22 @@ with st.container(border=True):
         st.caption(f"Aprox: ${usd_val:.2f}")
     
     with col_img:
-        # 2. Subir Imagen del Producto
         item_image = st.file_uploader("Foto del Producto (Opcional)", type=['png', 'jpg', 'jpeg'], key="prod_img")
 
     if st.button("➕ Agregar Item a Factura", type="primary"):
         if price_c <= 0:
             st.warning("Ingrese un precio válido.")
         else:
-            # Procesar imagen si existe
             img_data = None
             if item_image:
-                img_data = item_image.getvalue() # Convertir a bytes para el PDF
+                img_data = item_image.getvalue()
 
             new_item = {
                 "product": selected_product,
                 "quantity": qty,
                 "priceCordobas": price_c,
                 "priceDollars": price_c / DEFAULT_EXCHANGE_RATE,
-                "custom_image_data": img_data # Guardamos los bytes de la imagen
+                "custom_image_data": img_data
             }
             st.session_state.invoice_items.append(new_item)
             st.success("Agregado")
@@ -115,7 +130,7 @@ if st.session_state.invoice_items:
         with c1: 
             st.write(f"**{item['product']['description']}**")
             if item.get('custom_image_data'):
-                st.image(item['custom_image_data'], width=100) # Mostrar preview en pantalla
+                st.image(item['custom_image_data'], width=100)
         with c2: st.write(f"x{item['quantity']}")
         with c3: st.write(f"C$ {item['priceCordobas'] * item['quantity']:.2f}")
         with c4: 
@@ -154,11 +169,10 @@ if st.button("🖨️ Generar PDF", type="secondary", use_container_width=True):
         safe_name = st.session_state.client_data.get('fullName', 'Cliente').strip().replace(" ", "_")
         filename = f"factura_{st.session_state.consecutive}_{safe_name}.pdf"
         
-        # Pasar el logo cargado (si existe)
-        logo_bytes = uploaded_logo.getvalue() if uploaded_logo else None
-
         try:
+            # Pasamos el logo que ya leímos arriba
             generate_pdf_file(invoice_data, filename, logo_bytes=logo_bytes)
+            
             with open(filename, "rb") as f:
                 st.download_button("⬇️ Descargar PDF Final", f, file_name=filename, mime="application/pdf")
         except Exception as e:
